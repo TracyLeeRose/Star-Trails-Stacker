@@ -1,10 +1,6 @@
 # Star-Trails-Stacker
 Stacks and combines numerous star images of the sky into one
 
-
-markdown
-# Aquiplicity 2025 - Star Trail Image Stacker (v4 - Fix)
-
 A browser-based tool for stacking images to create star trail effects or reduce noise in astrophotography. Load multiple images (JPG, PNG, WEBP) of the same dimensions, select a stacking algorithm,
 and generate a composite image. This version includes fixes for improved reliability and performance.
 
@@ -27,7 +23,7 @@ No installation required! Simply open the `index.html` file in a modern web brow
 ### Steps:
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/your-username/star-trail-image-stacker.git
+   git clone https://github.com/TracyLeeRose/star-trail-image-stacker.git
 Open index.html in a web browser:
 bash
 open index.html
