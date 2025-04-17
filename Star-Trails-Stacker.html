@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aquiplicity 2025 - Star Trail Image Stacker (v4 - Fix)</title>
+    <style>
+        /* --- CSS Styles (Same as before) --- */
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: Arial, sans-serif; background-color: #333; color: #eee; }
+        #marqueeContainer { position: fixed; top: 0; left: 0; width: 100%; background: #222; border-bottom: 1px solid #555; overflow: hidden; height: 20px; z-index: 1000; }
+        #marquee { font-family: Arial, sans-serif; font-size: 12px; white-space: nowrap; animation: scroll 40s linear infinite; color: #ccc; }
+        @keyframes scroll { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+        #controls { display: flex; align-items: center; padding: 10px; flex-wrap: wrap; margin-top: 20px; border-bottom: 1px solid #555; background-color: #444; }
+        #mainContainer { display: flex; flex: 1; overflow: hidden; }
+        #thumbnailStrip { display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding: 5px; border-right: 1px solid #555; background: #3a3a3a; width: 165px; flex-shrink: 0; }
+        .thumbnail { width: 150px; height: auto; /* Adjust height automatically */ object-fit: contain; margin-bottom: 5px; border: 1px solid #777; cursor: default; /* Not clickable */ background-color: #555; }
+        .thumbnail:hover { border-color: #ccc; }
+        #workingArea { flex: 1; display: flex; flex-direction: column; align-items: center; overflow: auto; background-color: #282828; padding: 10px; }
+        /* Canvas styles */
+        canvas { border: 1px solid #666; margin: 10px auto; display: block; background-color: #111; max-width: calc(100% - 20px); max-height: calc(100% - 100px); /* Adjusted max-height */ box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+        #canvasOutput:not([width]):not([height]){ min-height: 300px; min-width: 400px; background-color: #555; border-style: dashed; border-color: #888; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.2em; text-align: center; padding: 10px; box-sizing: border-box; }
+        #status { margin: 10px 5px 5px 5px; font-family: Arial, sans-serif; font-size: 0.9em; color: #ccc; text-align: center; min-height: 1.2em; flex-shrink: 0; }
+        button, input[type="file"]::file-selector-button, select { margin: 5px; padding: 6px 12px; font-size: 0.9em; border-radius: 4px; border: 1px solid #666; background-color: #5a5a5a; color: #eee; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+        button:hover:not(:disabled), input[type="file"]::file-selector-button:hover, select:hover:not(:disabled) { background-color: #6a6a6a; border-color: #888; }
+        button:disabled, select:disabled { cursor: not-allowed; opacity: 0.5; }
+        .action-button { background-color: #4CAF50; color: white; border: none; box-shadow: 0 2px #3a8a40; }
+        .action-button:hover:not(:disabled) { background-color: #45a049; border: none; }
+        .action-button:active:not(:disabled) { box-shadow: 0 1px #3a8a40; transform: translateY(1px); }
+        .reset-button { background-color: #cc0000; color: white; padding: 4px 8px; border: none; border-radius: 3px; box-shadow: 0 2px #990000, 0 3px 5px rgba(0,0,0,0.2); cursor: pointer; font-family: Arial, sans-serif; font-size: 12px; transition: all 0.1s; margin: 0 5px; }
+        .reset-button:hover:not(:disabled) { background-color: #e60000; }
+        .reset-button:active:not(:disabled) { box-shadow: 0 1px #990000; transform: translateY(1px); }
+        #cancelButton { background-color: #ff6347; color: white; border: none; box-shadow: 0 2px #d9534f; }
+        #cancelButton:hover:not(:disabled) { background-color: #e5534f; border: none; }
+        #cancelButton:active:not(:disabled) { box-shadow: 0 1px #d9534f; transform: translateY(1px); }
+        #progressContainer { width: 80%; max-width: 400px; height: 12px; background-color: #555; border-radius: 6px; margin: 10px auto; overflow: hidden; display: none; border: 1px solid #777;}
+        #progressBar { width: 0%; height: 100%; background-color: #4CAF50; border-radius: 5px; transition: width 0.1s linear; }
+        .control-group { border: 1px solid #555; padding: 5px; margin: 5px; border-radius: 4px; background-color: #4a4a4a; display: inline-flex; align-items: center; flex-wrap: wrap; }
+         .control-group > span { font-weight: bold; font-size: 0.9em; margin-right: 10px; color: #ddd; }
+        #imageCountInfo { font-size: 0.8em; color: #bbb; margin-left: 10px; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div id="marqueeContainer">
+        <div id="marquee">Load multiple images (JPG, PNG, WEBP). Select stacking algorithm. Click Stack Images. Ensure all images have the SAME dimensions.</div>
+    </div>
+    <div id="controls">
+        <input type="file" id="imageInput" accept="image/jpeg, image/png, image/webp" multiple>
+        <div class="control-group">
+            <span>Algorithm:</span>
+            <select id="algorithmSelect">
+                <option value="lighten" selected>Lighten (Star Trails)</option>
+                <option value="average">Average (Noise Reduction)</option>
+                <option value="maximum">Maximum (Similar to Lighten)</option>
+            </select>
+        </div>
+        <button id="stackButton" onclick="stackImages()" class="action-button" disabled>Stack Images</button>
+        <button id="cancelButton" onclick="cancelStacking()" style="display: none;">Cancel</button>
+        <button id="resetButton" class="reset-button" onclick="resetApplication()">Reset</button>
+        <span id="imageCountInfo">(0 images loaded)</span>
+    </div>
+    <div id="mainContainer">
+        <div id="thumbnailStrip"></div>
+        <div id="workingArea">
+            <canvas id="canvasOutput">Select images using the button above. Ensure they all have the same dimensions.</canvas>
+            <div id="progressContainer"><div id="progressBar"></div></div>
+            <div id="status">Select multiple image files (JPG, PNG, WEBP) to begin.</div>
+            <div><button id="saveStackButton" onclick="saveStackedImage()" disabled>Save Stacked Image</button></div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // --- Constants ---
+        const THUMBNAIL_WIDTH = 150;
+        const YIELD_INTERVAL = 10;
+
+        // --- Global Variables ---
+        let canvas = null;
+        let ctx = null;
+        let status = null;
+        let stackButton = null;
+        let resetButton = null;
+        let cancelButton = null;
+        let saveStackButton = null;
+        let thumbnailStrip = null;
+        let progressContainer = null;
+        let progressBar = null;
+        let algorithmSelect = null;
+        let imageCountInfo = null;
+        let imageInput = null;
+
+        let loadedImageObjects = []; // Holds { image: Image, objectUrl: string }
+        let imageDimensions = { width: 0, height: 0, set: false };
+        let isCancelled = false;
+        let workerCanvas = document.createElement('canvas');
+        let workerCtx = workerCanvas.getContext('2d', { willReadFrequently: true });
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOMContentLoaded START");
+            // Assign element references
+            canvas = document.getElementById('canvasOutput');
+            status = document.getElementById('status');
+            stackButton = document.getElementById('stackButton');
+            resetButton = document.getElementById('resetButton');
+            cancelButton = document.getElementById('cancelButton');
+            saveStackButton = document.getElementById('saveStackButton');
+            thumbnailStrip = document.getElementById('thumbnailStrip');
+            progressContainer = document.getElementById('progressContainer');
+            progressBar = document.getElementById('progressBar');
+            algorithmSelect = document.getElementById('algorithmSelect');
+            imageCountInfo = document.getElementById('imageCountInfo');
+            imageInput = document.getElementById('imageInput');
+
+            if (!imageInput) {
+                 console.error("CRITICAL DOM Init Error: imageInput element not found!");
+                 alert("Error: File input element missing. App cannot start.");
+                 return;
+            }
+
+            imageInput.addEventListener('change', (event) => {
+                 console.log(">>> imageInput 'change' event fired!");
+                 handleImageUpload(event);
+            });
+            console.log("Event listener added to imageInput");
+
+            console.log('Page loaded - Star Trail Stacker Initialized');
+            resetApplication(); // Set initial state
+            console.log("DOMContentLoaded END");
+        });
+
+        // --- Image Upload Handler (Using ObjectURL) ---
+        async function handleImageUpload(e) {
+            console.log("handleImageUpload: Function START");
+            if (!e || !e.target || !e.target.files) {
+                 console.error("handleImageUpload: Invalid event object or target/files missing.", e);
+                 status.textContent = "Error: Could not access selected files.";
+                 return;
+            }
+            const files = e.target.files;
+
+            if (!files || files.length === 0) {
+                status.textContent = 'No image files selected';
+                 console.log("handleImageUpload: No files selected, exiting.");
+                return;
+            }
+            console.log(`handleImageUpload: Processing ${files.length} files.`);
+            resetApplication(); // Clear previous state BEFORE loading new images
+            console.log("handleImageUpload: resetApplication completed.");
+            stackButton.disabled = true;
+            status.textContent = `Loading ${files.length} images...`;
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            let filesProcessed = 0;
+            const promises = [];
+            const tempImageStore = [];
+
+            console.log("handleImageUpload: Starting file loop...");
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                console.log(`handleImageUpload: Loop ${i+1}/${files.length}, File: ${file.name}, Type: ${file.type}, Size: ${file.size}`);
+
+                if (!file.type.startsWith('image/')) {
+                    console.warn(`handleImageUpload: Skipping non-image file: ${file.name} (${file.type})`);
+                    filesProcessed++;
+                    updateProgress(filesProcessed, files.length);
+                    continue;
+                }
+
+                let objectUrl = null;
+                try {
+                    objectUrl = URL.createObjectURL(file);
+                     console.log(`handleImageUpload: Created ObjectURL for ${file.name}: ${objectUrl}`);
+                } catch (urlError) {
+                     console.error(`handleImageUpload: >>> Failed to create ObjectURL for ${file.name}`, urlError);
+                     filesProcessed++;
+                     updateProgress(filesProcessed, files.length);
+                     promises.push(Promise.resolve({ status: 'rejected', reason: `ObjectURL creation failed for ${file.name}` }));
+                     continue;
+                }
+
+                promises.push(new Promise((resolve, reject) => {
+                     console.log(`handleImageUpload: Creating image load promise for ${file.name}`);
+                    const img = new Image();
+
+                    img.onload = () => {
+                        console.log(`handleImageUpload: >>> img.onload SUCCESS for ${file.name} (${img.width}x${img.height}) using ${objectUrl}`);
+                        // ***** CORRECTED RESOLVE *****
+                        // Pass only the value object, not the {status, value} wrapper
+                        resolve({ image: img, file: file, objectUrl: objectUrl });
+                        // *****************************
+                         console.log(`handleImageUpload: Promise RESOLVED for ${file.name}`);
+                    };
+
+                    img.onerror = (err) => {
+                        console.error(`handleImageUpload: >>> img.onerror FAILED for ${file.name} using ${objectUrl}. Check if file is a valid image.`, err);
+                        URL.revokeObjectURL(objectUrl);
+                        console.log(`handleImageUpload: Revoked ObjectURL (onerror) for ${file.name}: ${objectUrl}`);
+                        // Reject with just the reason
+                        reject(`Error decoding image: ${file.name}`); // Pass only the reason string/object
+                         console.log(`handleImageUpload: Promise REJECTED (img.onerror) for ${file.name}`);
+                    };
+
+                    try {
+                        img.src = objectUrl;
+                         console.log(`handleImageUpload: img.src set to ObjectURL for ${file.name}`);
+                    } catch (e) {
+                         console.error(`handleImageUpload: >>> Error setting img.src to ObjectURL for ${file.name}`, e);
+                         URL.revokeObjectURL(objectUrl);
+                         console.log(`handleImageUpload: Revoked ObjectURL (src assignment error) for ${file.name}: ${objectUrl}`);
+                         // Reject with just the reason
+                         reject(`Error setting image source: ${file.name}`); // Pass only the reason string/object
+                         console.log(`handleImageUpload: Promise REJECTED (src assignment) for ${file.name}`);
+                    }
+                }).catch(rejectError => {
+                     console.error(`handleImageUpload: >>> Synchronous error in image load promise setup for ${file.name}`, rejectError);
+                     if (objectUrl) {
+                         URL.revokeObjectURL(objectUrl);
+                         console.log(`handleImageUpload: Revoked ObjectURL (promise setup error) for ${file.name}: ${objectUrl}`);
+                     }
+                     // Ensure the outer catch still results in a rejection for allSettled
+                     return Promise.reject(`Image promise setup error for ${file.name}: ${rejectError.message}`);
+                })); // End push Promise
+            } // End file loop
+             console.log(`handleImageUpload: File loop finished. ${promises.length} promises created (out of ${files.length} files).`);
+
+            console.log("handleImageUpload: Calling Promise.allSettled...");
+            const results = await Promise.allSettled(promises);
+            console.log("handleImageUpload: Promise.allSettled completed. Results count:", results.length);
+
+            console.log("handleImageUpload: Starting results processing loop...");
+            let successfulLoads = 0;
+            let dimensionErrors = 0;
+            let loadErrors = 0;
+            let firstErrorMessage = '';
+            let settledCount = 0;
+
+            results.forEach((result, index) => {
+                 settledCount++;
+                 console.log(`handleImageUpload: Processing result ${index+1}/${results.length}, Status: ${result.status}`);
+
+                 if (result.status === 'fulfilled') {
+                    // `result.value` should now directly be { image, file, objectUrl }
+                    console.log(`handleImageUpload: Result ${index+1} FULFILLED.`);
+                    // Check if the resolved value itself is valid
+                    if (!result.value || !result.value.image || !result.value.file || !result.value.objectUrl) {
+                         console.error(`handleImageUpload: >>> Result ${index+1} Fulfilled but value is incomplete or invalid!`, result.value);
+                         loadErrors++;
+                         if (!firstErrorMessage) firstErrorMessage = `Invalid fulfilled value for promise ${index+1}`;
+                         // Attempt to revoke URL if present in the broken value object
+                         if (result.value && result.value.objectUrl) {
+                              try { URL.revokeObjectURL(result.value.objectUrl); console.log(`Revoked URL for incomplete value: ${result.value.objectUrl}`);} catch(revErr){}
+                         }
+                         return; // Skip this invalid fulfilled result
+                    }
+                    // Deconstruct the value directly from result.value
+                    const { image, file, objectUrl } = result.value;
+                    console.log(`handleImageUpload:   Image: ${file.name}, Dimensions: ${image.width}x${image.height}`);
+
+                    try {
+                        if (!image.width || image.width <= 0 || !image.height || image.height <= 0) {
+                            throw new Error(`Invalid image dimensions detected for ${file.name}: ${image.width}x${image.height}`);
+                        }
+
+                        if (!imageDimensions.set) {
+                             console.log(`handleImageUpload:   Setting dimensions from ${file.name}: ${image.width}x${image.height}`);
+                            imageDimensions.width = image.width;
+                            imageDimensions.height = image.height;
+                            imageDimensions.set = true;
+                            tempImageStore.push({ image: image, objectUrl: objectUrl });
+                            createThumbnail(image, file.name);
+                            successfulLoads++;
+                            console.log(`handleImageUpload:   Added first image. successfulLoads: ${successfulLoads}`);
+                        } else if (image.width !== imageDimensions.width || image.height !== imageDimensions.height) {
+                            const errorMsg = `Dimension mismatch: ${file.name} (${image.width}x${image.height}) doesn't match expected (${imageDimensions.width}x${imageDimensions.height}). Skipping.`;
+                            console.warn("handleImageUpload:  ", errorMsg);
+                            dimensionErrors++;
+                             console.log(`handleImageUpload:   Dimension error. dimensionErrors: ${dimensionErrors}`);
+                            if (!firstErrorMessage) firstErrorMessage = errorMsg;
+                            URL.revokeObjectURL(objectUrl);
+                             console.log(`handleImageUpload: Revoked ObjectURL (dimension mismatch) for ${file.name}: ${objectUrl}`);
+                        } else {
+                            console.log(`handleImageUpload:   Dimensions match for ${file.name}.`);
+                            tempImageStore.push({ image: image, objectUrl: objectUrl });
+                            createThumbnail(image, file.name);
+                            successfulLoads++;
+                             console.log(`handleImageUpload:   Added matching image. successfulLoads: ${successfulLoads}`);
+                        }
+                    } catch (dimCheckError) {
+                         console.error(`handleImageUpload: >>> ERROR during dimension check/add for ${file?.name}`, dimCheckError);
+                         loadErrors++;
+                         console.log(`handleImageUpload:   Load error (dimension check). loadErrors: ${loadErrors}`);
+                         if (!firstErrorMessage) firstErrorMessage = `Error processing ${file?.name}: ${dimCheckError.message}`;
+                         URL.revokeObjectURL(objectUrl);
+                         console.log(`handleImageUpload: Revoked ObjectURL (dimension check error) for ${file.name}: ${objectUrl}`);
+                    }
+
+                 } else {
+                    // Promise was rejected, result.reason contains the rejection value
+                    console.error(`handleImageUpload: Result ${index+1} REJECTED. Reason:`, result.reason); // Log the actual reason
+                    loadErrors++;
+                     console.log(`handleImageUpload:   Load error (promise rejected). loadErrors: ${loadErrors}`);
+                     const reasonText = (typeof result.reason === 'string') ? result.reason : JSON.stringify(result.reason);
+                     if (!firstErrorMessage) firstErrorMessage = reasonText;
+                 }
+                 updateProgress(settledCount, promises.length);
+                 // console.log(`handleImageUpload:   Progress updated: ${settledCount}/${promises.length}`); // Reduce noise
+            }); // End results processing
+             console.log("handleImageUpload: Results processing loop finished.");
+
+            // --- Finalize ---
+            loadedImageObjects = tempImageStore;
+            console.log(`handleImageUpload: Final counts - Success: ${successfulLoads}, Dimension Errors: ${dimensionErrors}, Load Errors: ${loadErrors}`);
+            console.log(`handleImageUpload: Final loadedImageObjects count: ${loadedImageObjects.length}`);
+            imageCountInfo.textContent = `(${successfulLoads} images)`;
+
+            if (successfulLoads < 2) {
+                 let finalStatus = `Load complete. Need at least 2 images with the same dimensions to stack. Loaded: ${successfulLoads}.`;
+                 if (dimensionErrors > 0) finalStatus += ` ${dimensionErrors} had wrong dimensions.`;
+                 if (loadErrors > 0) finalStatus += ` ${loadErrors} failed to load or process.`;
+                 if (firstErrorMessage && firstErrorMessage.length < 100) { finalStatus += ` First error: ${firstErrorMessage}`; }
+                 else if (firstErrorMessage) { finalStatus += ` Check console for first error details.`; }
+                 status.textContent = finalStatus;
+                 stackButton.disabled = true;
+                 console.log(`handleImageUpload: Final Status (Not enough images): ${finalStatus}`);
+                 // Cleanup URLs even if loading failed overall
+                 cleanupObjectUrls(); // Called here ensures URLs from partially loaded sets are cleaned
+            } else {
+                 status.textContent = `Loaded ${successfulLoads} images successfully (${imageDimensions.width}x${imageDimensions.height}). Ready to stack.`;
+                 stackButton.disabled = false;
+                 console.log(`handleImageUpload: Final Status (Ready to stack): ${status.textContent}`);
+            }
+
+            setTimeout(() => {
+                if(progressContainer) progressContainer.style.display = 'none';
+                if(progressBar) progressBar.style.width = '0%';
+                 // console.log("handleImageUpload: Progress bar hidden."); // Reduce noise
+            }, 500);
+
+            try {
+                if(imageInput) imageInput.value = '';
+                 // console.log("handleImageUpload: File input cleared."); // Reduce noise
+            } catch(err) {
+                console.warn("handleImageUpload: Could not clear file input.", err);
+            }
+             console.log("handleImageUpload: Function END");
+        }
+
+        // --- Clean up Object URLs ---
+        function cleanupObjectUrls() {
+            if (!loadedImageObjects || loadedImageObjects.length === 0) {
+                 // console.log("cleanupObjectUrls: No URLs to clean."); // Reduce noise
+                 return;
+            }
+            console.log(`cleanupObjectUrls: Cleaning up ${loadedImageObjects.length} URLs.`);
+            loadedImageObjects.forEach(item => {
+                if (item.objectUrl) {
+                    try {
+                        URL.revokeObjectURL(item.objectUrl);
+                        // console.log(`Revoked: ${item.objectUrl}`); // Reduce noise
+                    } catch (e) {
+                        console.warn(`Error revoking URL ${item.objectUrl}:`, e);
+                    }
+                }
+            });
+             // Don't clear the array here, resetApplication does that after calling this
+        }
+
+        // --- Update Progress Bar ---
+        function updateProgress(current, total) {
+             const progress = total > 0 ? (current / total) * 100 : 0;
+             if(progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, progress || 0))}%`;
+        }
+
+        // --- Thumbnail Creation ---
+        function createThumbnail(img, title) {
+            const existingThumb = thumbnailStrip ? thumbnailStrip.querySelector(`img[title^="${title}"]`) : null;
+            if (existingThumb) return;
+            try {
+                const thumb = new Image();
+                thumb.src = img.src;
+                thumb.width = THUMBNAIL_WIDTH;
+                thumb.className = 'thumbnail';
+                thumb.title = `${title} (${img.width}x${img.height})`;
+                if (thumbnailStrip) {
+                     thumbnailStrip.appendChild(thumb);
+                } else {
+                     console.error("Cannot create thumbnail: thumbnailStrip element not found.");
+                }
+            } catch (thumbError) {
+                 console.error(`Error creating thumbnail for ${title}:`, thumbError);
+            }
+        }
+
+
+        // --- Cancel Stacking Operation ---
+        function cancelStacking() {
+            console.log("User initiated cancellation.");
+            isCancelled = true;
+            status.textContent = "Cancellation requested...";
+            if (cancelButton) cancelButton.disabled = true;
+        }
+
+        // --- Stack Images Function ---
+        async function stackImages() {
+            console.log("stackImages START");
+            if (!loadedImageObjects || loadedImageObjects.length < 2) {
+                status.textContent = "Need at least two loaded images of the same dimensions to stack.";
+                console.error("Stacking cancelled: Not enough valid images loaded.");
+                return;
+            }
+            if (!imageDimensions.set || imageDimensions.width <= 0 || imageDimensions.height <= 0) {
+                 status.textContent = "Cannot stack: Image dimensions not determined or invalid.";
+                 console.error("Stacking cancelled: Invalid image dimensions.");
+                 return;
+             }
+             if (!canvas) {
+                  status.textContent = "Error: Output canvas not found.";
+                  console.error("Stacking cancelled: Canvas element is null.");
+                  return;
+             }
+
+            console.log(`stackImages: Starting stack operation with ${loadedImageObjects.length} images.`);
+            console.log(`Algorithm: ${algorithmSelect.value}, Dimensions: ${imageDimensions.width}x${imageDimensions.height}`);
+
+            isCancelled = false;
+            if (stackButton) stackButton.disabled = true;
+            if (resetButton) resetButton.disabled = true;
+            if (saveStackButton) saveStackButton.disabled = true;
+            if (algorithmSelect) algorithmSelect.disabled = true;
+            if (cancelButton) { cancelButton.style.display = 'inline-block'; cancelButton.disabled = false; }
+
+            status.textContent = `Preparing to stack ${loadedImageObjects.length} images using '${algorithmSelect.value}'...`;
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (progressBar) progressBar.style.width = '0%';
+
+            try {
+                canvas.width = imageDimensions.width;
+                canvas.height = imageDimensions.height;
+                if (canvas.textContent) canvas.textContent = '';
+                ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) throw new Error("Could not get 2D context for output canvas.");
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // console.log("stackImages: Output canvas prepared."); // Reduce noise
+
+                workerCanvas.width = imageDimensions.width;
+                workerCanvas.height = imageDimensions.height;
+                // console.log("stackImages: Worker canvas prepared."); // Reduce noise
+
+                status.textContent = `Processing image 1 / ${loadedImageObjects.length}...`;
+                ctx.drawImage(loadedImageObjects[0].image, 0, 0);
+                // console.log("Drew first image onto output canvas."); // Reduce noise
+                updateProgress(1, loadedImageObjects.length);
+
+                let resultImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                let resultData = resultImageData.data;
+                // console.log("stackImages: Got initial image data."); // Reduce noise
+
+                let sumData = null;
+                if (algorithmSelect.value === 'average') {
+                    sumData = new Float32Array(resultData.length);
+                    for (let k = 0; k < resultData.length; k += 4) { sumData[k]=resultData[k]; sumData[k+1]=resultData[k+1]; sumData[k+2]=resultData[k+2]; }
+                    // console.log("Initialized sum array for averaging."); // Reduce noise
+                }
+
+                // console.log("stackImages: Starting processing loop for remaining images..."); // Reduce noise
+                for (let i = 1; i < loadedImageObjects.length; i++) {
+                    if (isCancelled) { status.textContent = `Stacking cancelled by user after ${i} images.`; console.log("Stacking loop cancelled."); break; }
+
+                    status.textContent = `Processing image ${i + 1} / ${loadedImageObjects.length}...`;
+                    const currentItem = loadedImageObjects[i];
+
+                    workerCtx.clearRect(0, 0, workerCanvas.width, workerCanvas.height);
+                    workerCtx.drawImage(currentItem.image, 0, 0);
+                    const currentImageData = workerCtx.getImageData(0, 0, workerCanvas.width, workerCanvas.height);
+                    const currentData = currentImageData.data;
+
+                    const numPixels = resultData.length / 4;
+                    const algo = algorithmSelect.value;
+                    switch (algo) {
+                        case 'lighten': case 'maximum':
+                            for(let p=0;p<numPixels;p++){ const idx=p*4; resultData[idx]=Math.max(resultData[idx],currentData[idx]); resultData[idx+1]=Math.max(resultData[idx+1],currentData[idx+1]); resultData[idx+2]=Math.max(resultData[idx+2],currentData[idx+2]); resultData[idx+3]=255; } break;
+                        case 'average':
+                            for(let p=0;p<numPixels;p++){ const idx=p*4; sumData[idx]+=currentData[idx]; sumData[idx+1]+=currentData[idx+1]; sumData[idx+2]+=currentData[idx+2]; } break;
+                        default: console.warn("Unsupported algorithm selected:", algo); break;
+                    }
+
+                    updateProgress(i + 1, loadedImageObjects.length);
+                    if ((i + 1) % YIELD_INTERVAL === 0 || (i + 1) === loadedImageObjects.length) { /* console.log(`stackImages: Processed image ${i+1}, yielding...`); */ await new Promise(resolve => setTimeout(resolve, 0)); }
+                } // End image loop
+                 // console.log("stackImages: Image processing loop finished."); // Reduce noise
+
+                if (!isCancelled) {
+                     // console.log("stackImages: Finalizing result (not cancelled)."); // Reduce noise
+                     if (algorithmSelect.value === 'average' && sumData) {
+                         // console.log("Calculating final average..."); // Reduce noise
+                         const numImages = loadedImageObjects.length; const numPixels = resultData.length / 4;
+                         for(let p=0;p<numPixels;p++){ const idx=p*4; resultData[idx]=Math.round(sumData[idx]/numImages); resultData[idx+1]=Math.round(sumData[idx+1]/numImages); resultData[idx+2]=Math.round(sumData[idx+2]/numImages); resultData[idx+3]=255; }
+                         // console.log("Averaging complete."); // Reduce noise
+                     }
+                    // console.log("Putting final image data onto canvas..."); // Reduce noise
+                    ctx.putImageData(resultImageData, 0, 0);
+                    status.textContent = `Stacking complete: ${loadedImageObjects.length} images processed using '${algorithmSelect.value}'.`;
+                    console.log(`Stacking finished successfully. Processed ${loadedImageObjects.length} images.`);
+                    if(saveStackButton) saveStackButton.disabled = false;
+                } else {
+                     status.textContent = `Stacking cancelled. ${loadedImageObjects.length} images were available.`;
+                     console.log("Stacking was cancelled by user.");
+                }
+
+            } catch (error) {
+                status.textContent = `Error during stacking: ${error.message}`;
+                console.error('>>> Error during stackImages:', error);
+                if (ctx && canvas && canvas.width > 0 && canvas.height > 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+                 if (canvas) { canvas.removeAttribute('width'); canvas.removeAttribute('height'); canvas.textContent = "An error occurred during stacking. Check console."; }
+                 if(saveStackButton) saveStackButton.disabled = true;
+            } finally {
+                 // console.log("stackImages: Finally block executing."); // Reduce noise
+                resetUIState();
+                isCancelled = false;
+                 // console.log("stackImages: END"); // Reduce noise
+            }
+        }
+
+        // --- Helper to reset UI state ---
+        function resetUIState() {
+             // console.log("resetUIState: Resetting UI controls."); // Reduce noise
+             if(stackButton) stackButton.disabled = !loadedImageObjects || loadedImageObjects.length < 2;
+             if(resetButton) resetButton.disabled = false;
+             if(algorithmSelect) algorithmSelect.disabled = false;
+             if(cancelButton) { cancelButton.style.display = 'none'; cancelButton.disabled = true; }
+
+             setTimeout(() => {
+                 if(progressContainer) progressContainer.style.display = 'none';
+                 if(progressBar) progressBar.style.width = '0%';
+             }, 500);
+             // console.log(`resetUIState: Controls updated. Cancelled state was: ${isCancelled}`); // Reduce noise
+        }
+
+        // --- Reset Application State ---
+        function resetApplication() {
+            console.log('resetApplication: START');
+            isCancelled = false;
+
+            cleanupObjectUrls(); // Clean up URLs first
+            loadedImageObjects = []; // Then clear the array
+            imageDimensions = { width: 0, height: 0, set: false };
+
+             if (ctx && canvas?.width > 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+             ctx = null;
+             if (canvas) { canvas.removeAttribute('width'); canvas.removeAttribute('height'); canvas.textContent = "Select images using the button above. Ensure they all have the same dimensions."; }
+
+            if (thumbnailStrip) thumbnailStrip.innerHTML = '';
+             console.log('resetApplication: Data arrays and thumbnails cleared.');
+
+            if(stackButton) stackButton.disabled = true;
+            if(resetButton) resetButton.disabled = false;
+            if(cancelButton) { cancelButton.style.display = 'none'; cancelButton.disabled = true; }
+            if(saveStackButton) saveStackButton.disabled = true;
+            if(algorithmSelect) { algorithmSelect.disabled = false; algorithmSelect.value = 'lighten'; }
+            if(status) status.textContent = 'Select multiple image files (JPG, PNG, WEBP) to begin.';
+            if(imageCountInfo) imageCountInfo.textContent = '(0 images loaded)';
+            if(progressContainer) progressContainer.style.display = 'none';
+            if(progressBar) progressBar.style.width = '0%';
+             console.log('resetApplication: UI controls reset.');
+
+            // Keep file input value clearing commented out unless needed
+            // try { if (imageInput) imageInput.value = ''; } catch(e){ console.warn("resetApplication: Could not clear file input.", e); }
+
+             console.log('resetApplication: END');
+        }
+
+        // --- Save Result Image ---
+        function saveStackedImage() {
+            console.log("saveStackedImage: START");
+            if (!canvas || !canvas.width || canvas.width <= 0 || !canvas.height || canvas.height <= 0) { if(status) status.textContent = 'No stacked image available to save'; console.log('Save failed: No image data on canvas'); return; }
+            if (!ctx) { ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) { if(status) status.textContent = 'Save failed: Canvas context is not available.'; console.error('Save failed: Canvas context lost/unacquirable.'); return; } console.warn("saveStackedImage: Reacquired context."); }
+
+            const algo = algorithmSelect ? algorithmSelect.value : 'unknown';
+            const frameCount = loadedImageObjects ? loadedImageObjects.length : 0;
+            const filename = `stacked_image_${algo}_${frameCount}frames.png`;
+            const link = document.createElement('a'); link.download = filename;
+
+            try {
+                 console.log(`saveStackedImage: Attempting to save as ${filename}`);
+                 link.href = canvas.toDataURL('image/png');
+                 // console.log("saveStackedImage: Generated PNG data URL."); // Reduce noise
+                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                 if(status) status.textContent = `Stacked image saved as ${filename}`; console.log(`Stacked image saved as ${filename}`);
+            } catch (e) {
+                console.error(">>> Error saving image:", e);
+                if(status) status.textContent = `Error saving image: ${e.message}. Canvas too large or tainted?`;
+            }
+             // console.log("saveStackedImage: END"); // Reduce noise
+        }
+
+    </script>
+</body>
+</html>
