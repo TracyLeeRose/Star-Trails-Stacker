@@ -1,5 +1,4 @@
-# Star-Stacker 2025 - Image Stacker for Star Trails (& Video Creator)
-
+# Star-Trails-Stacker 2025 (Image Stacker for creating astro photography star trails & Video Creator)
 This is a browser-based utility designed to perform two main functions using a sequence of images:
 
 1.  **Image Stacking:** Combine multiple images into a single image using different algorithms (Lighten, Average, Maximum). This is useful for astrophotography (star trails), noise reduction, or creating artistic effects.
