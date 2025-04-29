@@ -1,26 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Aquiplicity 2025 - Star Trail Image Stacker (v4 - Fix)</title>
+    <title>Aquiplicity 2025 - Image Stacker & Video Creator (v7 - Combined)</title>
     <style>
-        /* --- CSS Styles (Same as before) --- */
+        /* --- CSS Styles --- */
         body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: Arial, sans-serif; background-color: #333; color: #eee; }
         #marqueeContainer { position: fixed; top: 0; left: 0; width: 100%; background: #222; border-bottom: 1px solid #555; overflow: hidden; height: 20px; z-index: 1000; }
-        #marquee { font-family: Arial, sans-serif; font-size: 12px; white-space: nowrap; animation: scroll 40s linear infinite; color: #ccc; }
+        #marquee { font-family: Arial, sans-serif; font-size: 12px; white-space: nowrap; animation: scroll 60s linear infinite; color: #ccc; }
         @keyframes scroll { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
         #controls { display: flex; align-items: center; padding: 10px; flex-wrap: wrap; margin-top: 20px; border-bottom: 1px solid #555; background-color: #444; }
         #mainContainer { display: flex; flex: 1; overflow: hidden; }
         #thumbnailStrip { display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding: 5px; border-right: 1px solid #555; background: #3a3a3a; width: 165px; flex-shrink: 0; }
-        .thumbnail { width: 150px; height: auto; /* Adjust height automatically */ object-fit: contain; margin-bottom: 5px; border: 1px solid #777; cursor: default; /* Not clickable */ background-color: #555; }
+
+        /* Thumbnail container */
+        .thumbnail-container { position: relative; margin-bottom: 5px; width: 150px; height: auto; line-height: 0; }
+        .thumbnail { display: block; width: 100%; height: auto; object-fit: contain; border: 1px solid #777; cursor: default; background-color: #555; }
         .thumbnail:hover { border-color: #ccc; }
+
+        /* Delete button */
+        .delete-thumbnail-button { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; background-color: rgba(220, 0, 0, 0.7); color: white; border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 50%; cursor: pointer; font-size: 12px; font-weight: bold; line-height: 16px; text-align: center; z-index: 10; opacity: 0.7; transition: background-color 0.2s, opacity 0.2s; }
+        .delete-thumbnail-button:hover { background-color: rgba(255, 0, 0, 0.9); opacity: 1.0; }
+
         #workingArea { flex: 1; display: flex; flex-direction: column; align-items: center; overflow: auto; background-color: #282828; padding: 10px; }
-        /* Canvas styles */
-        canvas { border: 1px solid #666; margin: 10px auto; display: block; background-color: #111; max-width: calc(100% - 20px); max-height: calc(100% - 100px); /* Adjusted max-height */ box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+        /* Canvas */
+        canvas { border: 1px solid #666; margin: 10px auto; display: block; background-color: #111; max-width: calc(100% - 20px); max-height: calc(100% - 130px); /* Adjusted max-height */ box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
         #canvasOutput:not([width]):not([height]){ min-height: 300px; min-width: 400px; background-color: #555; border-style: dashed; border-color: #888; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.2em; text-align: center; padding: 10px; box-sizing: border-box; }
         #status { margin: 10px 5px 5px 5px; font-family: Arial, sans-serif; font-size: 0.9em; color: #ccc; text-align: center; min-height: 1.2em; flex-shrink: 0; }
-        button, input[type="file"]::file-selector-button, select { margin: 5px; padding: 6px 12px; font-size: 0.9em; border-radius: 4px; border: 1px solid #666; background-color: #5a5a5a; color: #eee; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-        button:hover:not(:disabled), input[type="file"]::file-selector-button:hover, select:hover:not(:disabled) { background-color: #6a6a6a; border-color: #888; }
-        button:disabled, select:disabled { cursor: not-allowed; opacity: 0.5; }
+        button, input[type="file"]::file-selector-button, input[type="number"], select { margin: 5px; padding: 6px 12px; font-size: 0.9em; border-radius: 4px; border: 1px solid #666; background-color: #5a5a5a; color: #eee; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+        input[type="number"] { width: 50px; padding: 6px 8px; }
+        button:hover:not(:disabled), input[type="file"]::file-selector-button:hover, input[type="number"]:hover:not(:disabled), select:hover:not(:disabled) { background-color: #6a6a6a; border-color: #888; }
+        button:disabled, select:disabled, input:disabled { cursor: not-allowed; opacity: 0.5; }
         .action-button { background-color: #4CAF50; color: white; border: none; box-shadow: 0 2px #3a8a40; }
         .action-button:hover:not(:disabled) { background-color: #45a049; border: none; }
         .action-button:active:not(:disabled) { box-shadow: 0 1px #3a8a40; transform: translateY(1px); }
@@ -33,121 +42,146 @@
         #progressContainer { width: 80%; max-width: 400px; height: 12px; background-color: #555; border-radius: 6px; margin: 10px auto; overflow: hidden; display: none; border: 1px solid #777;}
         #progressBar { width: 0%; height: 100%; background-color: #4CAF50; border-radius: 5px; transition: width 0.1s linear; }
         .control-group { border: 1px solid #555; padding: 5px; margin: 5px; border-radius: 4px; background-color: #4a4a4a; display: inline-flex; align-items: center; flex-wrap: wrap; }
-         .control-group > span { font-weight: bold; font-size: 0.9em; margin-right: 10px; color: #ddd; }
+        .control-group > span { font-weight: bold; font-size: 0.9em; margin-right: 10px; color: #ddd; }
         #imageCountInfo { font-size: 0.8em; color: #bbb; margin-left: 10px; margin-right: 10px; }
+        .button-container { margin-top: 10px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; } /* Container for save buttons */
     </style>
 </head>
 <body>
     <div id="marqueeContainer">
-        <div id="marquee">Load multiple images (JPG, PNG, WEBP). Select stacking algorithm. Click Stack Images. Ensure all images have the SAME dimensions.</div>
+        <div id="marquee">Load images (JPG, PNG, WEBP). Ensure SAME dimensions. Stack images (needs >= 2) using an algorithm, or create a video (needs >= 1) with chosen FPS. Delete flawed images with 'X'. Browser support for MediaRecorder required for video.</div>
     </div>
     <div id="controls">
         <input type="file" id="imageInput" accept="image/jpeg, image/png, image/webp" multiple>
         <div class="control-group">
-            <span>Algorithm:</span>
-            <select id="algorithmSelect">
+            <span>Stack Alg:</span>
+            <select id="algorithmSelect" title="Algorithm for stacking images">
                 <option value="lighten" selected>Lighten (Star Trails)</option>
                 <option value="average">Average (Noise Reduction)</option>
                 <option value="maximum">Maximum (Similar to Lighten)</option>
             </select>
         </div>
-        <button id="stackButton" onclick="stackImages()" class="action-button" disabled>Stack Images</button>
-        <button id="cancelButton" onclick="cancelStacking()" style="display: none;">Cancel</button>
+         <button id="stackButton" onclick="stackImages()" class="action-button" disabled title="Stack loaded images into one">Stack Images</button>
+         <div class="control-group">
+            <span>Video FPS:</span>
+            <input type="number" id="fpsInput" value="10" min="1" max="60" title="Frames Per Second for the output video">
+        </div>
+        <button id="createVideoButton" onclick="createVideo()" class="action-button" disabled title="Create video from loaded images">Create Video</button>
+        <button id="cancelButton" onclick="cancelCurrentOperation()" style="display: none;">Cancel</button>
         <button id="resetButton" class="reset-button" onclick="resetApplication()">Reset</button>
         <span id="imageCountInfo">(0 images loaded)</span>
     </div>
     <div id="mainContainer">
         <div id="thumbnailStrip"></div>
         <div id="workingArea">
-            <canvas id="canvasOutput">Select images using the button above. Ensure they all have the same dimensions.</canvas>
+            <canvas id="canvasOutput">Load images using the button above. Then choose to Stack or Create Video.</canvas>
             <div id="progressContainer"><div id="progressBar"></div></div>
-            <div id="status">Select multiple image files (JPG, PNG, WEBP) to begin.</div>
-            <div><button id="saveStackButton" onclick="saveStackedImage()" disabled>Save Stacked Image</button></div>
+            <div id="status">Select multiple image files (JPG, PNG, WEBP) in sequence to begin.</div>
+            <div class="button-container">
+                 <button id="saveStackButton" onclick="saveStackedImage()" disabled>Save Stacked Image</button>
+                 <button id="saveVideoButton" onclick="triggerVideoSave()" disabled>Save Video</button>
+            </div>
         </div>
     </div>
 
     <script type="text/javascript">
         // --- Constants ---
         const THUMBNAIL_WIDTH = 150;
-        const YIELD_INTERVAL = 10;
+        const YIELD_INTERVAL = 10; // For stacking loop
 
         // --- Global Variables ---
         let canvas = null;
         let ctx = null;
         let status = null;
         let stackButton = null;
+        let createVideoButton = null;
         let resetButton = null;
         let cancelButton = null;
         let saveStackButton = null;
+        let saveVideoButton = null;
         let thumbnailStrip = null;
         let progressContainer = null;
         let progressBar = null;
         let algorithmSelect = null;
+        let fpsInput = null;
         let imageCountInfo = null;
         let imageInput = null;
 
-        let loadedImageObjects = []; // Holds { image: Image, objectUrl: string }
+        // Holds { image: Image, objectUrl: string, fileName: string }
+        let loadedImageObjects = [];
         let imageDimensions = { width: 0, height: 0, set: false };
         let isCancelled = false;
+        let currentOperation = null; // 'stacking', 'video', or null
+
+        // Stacking specific
         let workerCanvas = document.createElement('canvas');
         let workerCtx = workerCanvas.getContext('2d', { willReadFrequently: true });
+        let stackedImageAvailable = false; // Flag if canvas holds a valid stack result
+
+        // Video Recording specific
+        let mediaRecorder = null;
+        let videoChunks = [];
+        let recordedVideoBlob = null;
+        let recordTimer = null;
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("DOMContentLoaded START");
+            console.log("DOMContentLoaded START - Combined Stacker & Video Creator");
             // Assign element references
             canvas = document.getElementById('canvasOutput');
             status = document.getElementById('status');
             stackButton = document.getElementById('stackButton');
+            createVideoButton = document.getElementById('createVideoButton');
             resetButton = document.getElementById('resetButton');
             cancelButton = document.getElementById('cancelButton');
             saveStackButton = document.getElementById('saveStackButton');
+            saveVideoButton = document.getElementById('saveVideoButton');
             thumbnailStrip = document.getElementById('thumbnailStrip');
             progressContainer = document.getElementById('progressContainer');
             progressBar = document.getElementById('progressBar');
             algorithmSelect = document.getElementById('algorithmSelect');
+            fpsInput = document.getElementById('fpsInput');
             imageCountInfo = document.getElementById('imageCountInfo');
             imageInput = document.getElementById('imageInput');
 
-            if (!imageInput) {
-                 console.error("CRITICAL DOM Init Error: imageInput element not found!");
-                 alert("Error: File input element missing. App cannot start.");
+            if (!imageInput || !thumbnailStrip || !canvas || !stackButton || !createVideoButton) {
+                 console.error("CRITICAL DOM Init Error: Essential elements not found!");
+                 alert("Error: Critical UI elements missing. App cannot start.");
                  return;
             }
 
-            imageInput.addEventListener('change', (event) => {
-                 console.log(">>> imageInput 'change' event fired!");
-                 handleImageUpload(event);
-            });
-            console.log("Event listener added to imageInput");
+            // Check for MediaRecorder support
+            if (typeof MediaRecorder === 'undefined') {
+                console.warn("MediaRecorder API not supported. Video creation will be disabled.");
+                if(createVideoButton) createVideoButton.disabled = true;
+                if(createVideoButton) createVideoButton.title = "Video creation not supported by your browser.";
+                if(saveVideoButton) saveVideoButton.disabled = true;
+                // Don't block the entire app, stacking might still work
+            }
 
-            console.log('Page loaded - Star Trail Stacker Initialized');
+            imageInput.addEventListener('change', handleImageUpload);
+            thumbnailStrip.addEventListener('click', handleThumbnailClick);
+
+            console.log('Page loaded - Combined Stacker & Video Creator Initialized');
             resetApplication(); // Set initial state
             console.log("DOMContentLoaded END");
         });
 
-        // --- Image Upload Handler (Using ObjectURL) ---
+        // --- Image Upload Handler ---
         async function handleImageUpload(e) {
             console.log("handleImageUpload: Function START");
-            if (!e || !e.target || !e.target.files) {
-                 console.error("handleImageUpload: Invalid event object or target/files missing.", e);
-                 status.textContent = "Error: Could not access selected files.";
-                 return;
-            }
-            const files = e.target.files;
+            const files = e.target.files ? Array.from(e.target.files).sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'})) : [];
 
             if (!files || files.length === 0) {
                 status.textContent = 'No image files selected';
-                 console.log("handleImageUpload: No files selected, exiting.");
                 return;
             }
-            console.log(`handleImageUpload: Processing ${files.length} files.`);
+            console.log(`handleImageUpload: Processing ${files.length} files (sorted).`);
             resetApplication(); // Clear previous state BEFORE loading new images
-            console.log("handleImageUpload: resetApplication completed.");
-            stackButton.disabled = true;
             status.textContent = `Loading ${files.length} images...`;
             progressContainer.style.display = 'block';
             progressBar.style.width = '0%';
+            stackedImageAvailable = false; // New images invalidate previous stack
 
             let filesProcessed = 0;
             const promises = [];
@@ -156,440 +190,509 @@
             console.log("handleImageUpload: Starting file loop...");
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                console.log(`handleImageUpload: Loop ${i+1}/${files.length}, File: ${file.name}, Type: ${file.type}, Size: ${file.size}`);
-
-                if (!file.type.startsWith('image/')) {
-                    console.warn(`handleImageUpload: Skipping non-image file: ${file.name} (${file.type})`);
-                    filesProcessed++;
-                    updateProgress(filesProcessed, files.length);
-                    continue;
+                 if (!file.type.startsWith('image/')) {
+                    console.warn(`Skipping non-image file: ${file.name}`); filesProcessed++; updateProgress(filesProcessed, files.length); continue;
                 }
-
                 let objectUrl = null;
-                try {
-                    objectUrl = URL.createObjectURL(file);
-                     console.log(`handleImageUpload: Created ObjectURL for ${file.name}: ${objectUrl}`);
-                } catch (urlError) {
-                     console.error(`handleImageUpload: >>> Failed to create ObjectURL for ${file.name}`, urlError);
-                     filesProcessed++;
-                     updateProgress(filesProcessed, files.length);
-                     promises.push(Promise.resolve({ status: 'rejected', reason: `ObjectURL creation failed for ${file.name}` }));
-                     continue;
-                }
+                try { objectUrl = URL.createObjectURL(file); }
+                catch (urlError) { console.error(`Failed ObjectURL for ${file.name}`, urlError); filesProcessed++; updateProgress(filesProcessed, files.length); continue; }
 
                 promises.push(new Promise((resolve, reject) => {
-                     console.log(`handleImageUpload: Creating image load promise for ${file.name}`);
                     const img = new Image();
+                    img.onload = () => resolve({ image: img, objectUrl: objectUrl, fileName: file.name });
+                    img.onerror = (err) => { console.error(`Img load error for ${file.name}`, err); URL.revokeObjectURL(objectUrl); reject(`Error decoding: ${file.name}`); };
+                    try { img.src = objectUrl; } catch (e) { console.error(`Error setting img.src for ${file.name}`, e); URL.revokeObjectURL(objectUrl); reject(`Error setting src: ${file.name}`); }
+                }).catch(rejectError => Promise.reject(rejectError))); // Ensure catch returns rejected promise
+            }
 
-                    img.onload = () => {
-                        console.log(`handleImageUpload: >>> img.onload SUCCESS for ${file.name} (${img.width}x${img.height}) using ${objectUrl}`);
-                        // ***** CORRECTED RESOLVE *****
-                        // Pass only the value object, not the {status, value} wrapper
-                        resolve({ image: img, file: file, objectUrl: objectUrl });
-                        // *****************************
-                         console.log(`handleImageUpload: Promise RESOLVED for ${file.name}`);
-                    };
-
-                    img.onerror = (err) => {
-                        console.error(`handleImageUpload: >>> img.onerror FAILED for ${file.name} using ${objectUrl}. Check if file is a valid image.`, err);
-                        URL.revokeObjectURL(objectUrl);
-                        console.log(`handleImageUpload: Revoked ObjectURL (onerror) for ${file.name}: ${objectUrl}`);
-                        // Reject with just the reason
-                        reject(`Error decoding image: ${file.name}`); // Pass only the reason string/object
-                         console.log(`handleImageUpload: Promise REJECTED (img.onerror) for ${file.name}`);
-                    };
-
-                    try {
-                        img.src = objectUrl;
-                         console.log(`handleImageUpload: img.src set to ObjectURL for ${file.name}`);
-                    } catch (e) {
-                         console.error(`handleImageUpload: >>> Error setting img.src to ObjectURL for ${file.name}`, e);
-                         URL.revokeObjectURL(objectUrl);
-                         console.log(`handleImageUpload: Revoked ObjectURL (src assignment error) for ${file.name}: ${objectUrl}`);
-                         // Reject with just the reason
-                         reject(`Error setting image source: ${file.name}`); // Pass only the reason string/object
-                         console.log(`handleImageUpload: Promise REJECTED (src assignment) for ${file.name}`);
-                    }
-                }).catch(rejectError => {
-                     console.error(`handleImageUpload: >>> Synchronous error in image load promise setup for ${file.name}`, rejectError);
-                     if (objectUrl) {
-                         URL.revokeObjectURL(objectUrl);
-                         console.log(`handleImageUpload: Revoked ObjectURL (promise setup error) for ${file.name}: ${objectUrl}`);
-                     }
-                     // Ensure the outer catch still results in a rejection for allSettled
-                     return Promise.reject(`Image promise setup error for ${file.name}: ${rejectError.message}`);
-                })); // End push Promise
-            } // End file loop
-             console.log(`handleImageUpload: File loop finished. ${promises.length} promises created (out of ${files.length} files).`);
-
-            console.log("handleImageUpload: Calling Promise.allSettled...");
             const results = await Promise.allSettled(promises);
-            console.log("handleImageUpload: Promise.allSettled completed. Results count:", results.length);
-
-            console.log("handleImageUpload: Starting results processing loop...");
-            let successfulLoads = 0;
-            let dimensionErrors = 0;
-            let loadErrors = 0;
-            let firstErrorMessage = '';
+            let successfulLoads = 0, dimensionErrors = 0, loadErrors = 0, firstErrorMessage = '';
             let settledCount = 0;
 
             results.forEach((result, index) => {
                  settledCount++;
-                 console.log(`handleImageUpload: Processing result ${index+1}/${results.length}, Status: ${result.status}`);
-
                  if (result.status === 'fulfilled') {
-                    // `result.value` should now directly be { image, file, objectUrl }
-                    console.log(`handleImageUpload: Result ${index+1} FULFILLED.`);
-                    // Check if the resolved value itself is valid
-                    if (!result.value || !result.value.image || !result.value.file || !result.value.objectUrl) {
-                         console.error(`handleImageUpload: >>> Result ${index+1} Fulfilled but value is incomplete or invalid!`, result.value);
-                         loadErrors++;
-                         if (!firstErrorMessage) firstErrorMessage = `Invalid fulfilled value for promise ${index+1}`;
-                         // Attempt to revoke URL if present in the broken value object
-                         if (result.value && result.value.objectUrl) {
-                              try { URL.revokeObjectURL(result.value.objectUrl); console.log(`Revoked URL for incomplete value: ${result.value.objectUrl}`);} catch(revErr){}
-                         }
-                         return; // Skip this invalid fulfilled result
-                    }
-                    // Deconstruct the value directly from result.value
-                    const { image, file, objectUrl } = result.value;
-                    console.log(`handleImageUpload:   Image: ${file.name}, Dimensions: ${image.width}x${image.height}`);
-
+                    const { image, objectUrl, fileName } = result.value; // Assume value is valid if fulfilled (basic check)
                     try {
-                        if (!image.width || image.width <= 0 || !image.height || image.height <= 0) {
-                            throw new Error(`Invalid image dimensions detected for ${file.name}: ${image.width}x${image.height}`);
-                        }
-
+                        if (!image?.width || image.width <= 0 || !image?.height || image.height <= 0) throw new Error(`Invalid dimensions ${image.width}x${image.height}`);
                         if (!imageDimensions.set) {
-                             console.log(`handleImageUpload:   Setting dimensions from ${file.name}: ${image.width}x${image.height}`);
-                            imageDimensions.width = image.width;
-                            imageDimensions.height = image.height;
-                            imageDimensions.set = true;
-                            tempImageStore.push({ image: image, objectUrl: objectUrl });
-                            createThumbnail(image, file.name);
-                            successfulLoads++;
-                            console.log(`handleImageUpload:   Added first image. successfulLoads: ${successfulLoads}`);
+                            imageDimensions = { width: image.width, height: image.height, set: true };
+                            tempImageStore.push({ image, objectUrl, fileName }); createThumbnail(image, fileName); successfulLoads++;
                         } else if (image.width !== imageDimensions.width || image.height !== imageDimensions.height) {
-                            const errorMsg = `Dimension mismatch: ${file.name} (${image.width}x${image.height}) doesn't match expected (${imageDimensions.width}x${imageDimensions.height}). Skipping.`;
-                            console.warn("handleImageUpload:  ", errorMsg);
-                            dimensionErrors++;
-                             console.log(`handleImageUpload:   Dimension error. dimensionErrors: ${dimensionErrors}`);
-                            if (!firstErrorMessage) firstErrorMessage = errorMsg;
-                            URL.revokeObjectURL(objectUrl);
-                             console.log(`handleImageUpload: Revoked ObjectURL (dimension mismatch) for ${file.name}: ${objectUrl}`);
+                            const errorMsg = `Dimension mismatch: ${fileName} (${image.width}x${image.height}) vs expected (${imageDimensions.width}x${imageDimensions.height}). Skipping.`;
+                            console.warn(errorMsg); dimensionErrors++; if (!firstErrorMessage) firstErrorMessage = errorMsg; URL.revokeObjectURL(objectUrl);
                         } else {
-                            console.log(`handleImageUpload:   Dimensions match for ${file.name}.`);
-                            tempImageStore.push({ image: image, objectUrl: objectUrl });
-                            createThumbnail(image, file.name);
-                            successfulLoads++;
-                             console.log(`handleImageUpload:   Added matching image. successfulLoads: ${successfulLoads}`);
+                            tempImageStore.push({ image, objectUrl, fileName }); createThumbnail(image, fileName); successfulLoads++;
                         }
-                    } catch (dimCheckError) {
-                         console.error(`handleImageUpload: >>> ERROR during dimension check/add for ${file?.name}`, dimCheckError);
-                         loadErrors++;
-                         console.log(`handleImageUpload:   Load error (dimension check). loadErrors: ${loadErrors}`);
-                         if (!firstErrorMessage) firstErrorMessage = `Error processing ${file?.name}: ${dimCheckError.message}`;
-                         URL.revokeObjectURL(objectUrl);
-                         console.log(`handleImageUpload: Revoked ObjectURL (dimension check error) for ${file.name}: ${objectUrl}`);
-                    }
-
-                 } else {
-                    // Promise was rejected, result.reason contains the rejection value
-                    console.error(`handleImageUpload: Result ${index+1} REJECTED. Reason:`, result.reason); // Log the actual reason
-                    loadErrors++;
-                     console.log(`handleImageUpload:   Load error (promise rejected). loadErrors: ${loadErrors}`);
-                     const reasonText = (typeof result.reason === 'string') ? result.reason : JSON.stringify(result.reason);
-                     if (!firstErrorMessage) firstErrorMessage = reasonText;
-                 }
+                    } catch (procError) { console.error(`Error processing loaded image ${fileName}`, procError); loadErrors++; if (!firstErrorMessage) firstErrorMessage = procError.message; URL.revokeObjectURL(objectUrl); }
+                 } else { console.error(`Image load REJECTED:`, result.reason); loadErrors++; if (!firstErrorMessage) firstErrorMessage = result.reason; }
                  updateProgress(settledCount, promises.length);
-                 // console.log(`handleImageUpload:   Progress updated: ${settledCount}/${promises.length}`); // Reduce noise
-            }); // End results processing
-             console.log("handleImageUpload: Results processing loop finished.");
+            });
 
-            // --- Finalize ---
             loadedImageObjects = tempImageStore;
-            console.log(`handleImageUpload: Final counts - Success: ${successfulLoads}, Dimension Errors: ${dimensionErrors}, Load Errors: ${loadErrors}`);
-            console.log(`handleImageUpload: Final loadedImageObjects count: ${loadedImageObjects.length}`);
-            imageCountInfo.textContent = `(${successfulLoads} images)`;
+            console.log(`Load Final - Success: ${successfulLoads}, Dim Errors: ${dimensionErrors}, Load Errors: ${loadErrors}`);
+            updateImageCountInfo();
 
-            if (successfulLoads < 2) {
-                 let finalStatus = `Load complete. Need at least 2 images with the same dimensions to stack. Loaded: ${successfulLoads}.`;
-                 if (dimensionErrors > 0) finalStatus += ` ${dimensionErrors} had wrong dimensions.`;
-                 if (loadErrors > 0) finalStatus += ` ${loadErrors} failed to load or process.`;
-                 if (firstErrorMessage && firstErrorMessage.length < 100) { finalStatus += ` First error: ${firstErrorMessage}`; }
-                 else if (firstErrorMessage) { finalStatus += ` Check console for first error details.`; }
-                 status.textContent = finalStatus;
-                 stackButton.disabled = true;
-                 console.log(`handleImageUpload: Final Status (Not enough images): ${finalStatus}`);
-                 // Cleanup URLs even if loading failed overall
-                 cleanupObjectUrls(); // Called here ensures URLs from partially loaded sets are cleaned
+            if (successfulLoads > 0 && imageDimensions.set) {
+                 status.textContent = `Loaded ${successfulLoads} images (${imageDimensions.width}x${imageDimensions.height}). Ready for action.`;
+                 // Display first frame on canvas
+                 try {
+                     canvas.width = imageDimensions.width; canvas.height = imageDimensions.height;
+                     if(canvas.textContent) canvas.textContent = '';
+                     ctx = canvas.getContext('2d');
+                     ctx.drawImage(loadedImageObjects[0].image, 0, 0);
+                     stackedImageAvailable = false; // Canvas shows a single frame, not a stack result
+                 } catch(e) { console.error("Error displaying first frame:", e); clearCanvas(); }
             } else {
-                 status.textContent = `Loaded ${successfulLoads} images successfully (${imageDimensions.width}x${imageDimensions.height}). Ready to stack.`;
-                 stackButton.disabled = false;
-                 console.log(`handleImageUpload: Final Status (Ready to stack): ${status.textContent}`);
+                 let finalStatus = `Load complete. Issues encountered. Loaded: ${successfulLoads}.`;
+                 if (dimensionErrors > 0) finalStatus += ` ${dimensionErrors} had wrong dimensions.`;
+                 if (loadErrors > 0) finalStatus += ` ${loadErrors} failed to load.`;
+                 if (firstErrorMessage) finalStatus += ` First error: ${firstErrorMessage.substring(0,100)}`;
+                 status.textContent = finalStatus;
+                 clearCanvas();
             }
 
-            setTimeout(() => {
-                if(progressContainer) progressContainer.style.display = 'none';
-                if(progressBar) progressBar.style.width = '0%';
-                 // console.log("handleImageUpload: Progress bar hidden."); // Reduce noise
-            }, 500);
+            setTimeout(() => { if(progressContainer) progressContainer.style.display = 'none'; if(progressBar) progressBar.style.width = '0%'; }, 500);
+            try { if(imageInput) imageInput.value = ''; } catch(err) { console.warn("Could not clear file input.", err); }
 
-            try {
-                if(imageInput) imageInput.value = '';
-                 // console.log("handleImageUpload: File input cleared."); // Reduce noise
-            } catch(err) {
-                console.warn("handleImageUpload: Could not clear file input.", err);
-            }
-             console.log("handleImageUpload: Function END");
+            resetUIState(); // Update button enable/disable status
+            console.log("handleImageUpload: Function END");
         }
 
         // --- Clean up Object URLs ---
         function cleanupObjectUrls() {
-            if (!loadedImageObjects || loadedImageObjects.length === 0) {
-                 // console.log("cleanupObjectUrls: No URLs to clean."); // Reduce noise
-                 return;
-            }
-            console.log(`cleanupObjectUrls: Cleaning up ${loadedImageObjects.length} URLs.`);
-            loadedImageObjects.forEach(item => {
-                if (item.objectUrl) {
-                    try {
-                        URL.revokeObjectURL(item.objectUrl);
-                        // console.log(`Revoked: ${item.objectUrl}`); // Reduce noise
-                    } catch (e) {
-                        console.warn(`Error revoking URL ${item.objectUrl}:`, e);
-                    }
-                }
-            });
-             // Don't clear the array here, resetApplication does that after calling this
+            loadedImageObjects.forEach(item => { if (item.objectUrl) try { URL.revokeObjectURL(item.objectUrl); } catch (e) { console.warn(`Error revoking URL ${item.objectUrl}`, e); } });
+        }
+
+        // --- Clear Canvas ---
+        function clearCanvas() {
+            if (ctx && canvas?.width > 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+            if (canvas) { canvas.removeAttribute('width'); canvas.removeAttribute('height'); canvas.textContent = "Load images or perform an action."; }
+            ctx = null;
+            stackedImageAvailable = false;
         }
 
         // --- Update Progress Bar ---
         function updateProgress(current, total) {
-             const progress = total > 0 ? (current / total) * 100 : 0;
-             if(progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, progress || 0))}%`;
+             const progress = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+             if(progressBar) progressBar.style.width = `${progress}%`;
+        }
+
+        // --- Update Image Count Display ---
+        function updateImageCountInfo() {
+            const count = loadedImageObjects.length;
+            if(imageCountInfo) imageCountInfo.textContent = `(${count} images loaded)`;
         }
 
         // --- Thumbnail Creation ---
-        function createThumbnail(img, title) {
-            const existingThumb = thumbnailStrip ? thumbnailStrip.querySelector(`img[title^="${title}"]`) : null;
-            if (existingThumb) return;
+        function createThumbnail(img, fileName) {
+            if (!thumbnailStrip) return;
+            const existing = thumbnailStrip.querySelector(`.thumbnail-container[data-image-title="${CSS.escape(fileName)}"]`);
+            if (existing) return; // Avoid duplicates if upload handler logic changes
             try {
-                const thumb = new Image();
-                thumb.src = img.src;
-                thumb.width = THUMBNAIL_WIDTH;
-                thumb.className = 'thumbnail';
-                thumb.title = `${title} (${img.width}x${img.height})`;
-                if (thumbnailStrip) {
-                     thumbnailStrip.appendChild(thumb);
-                } else {
-                     console.error("Cannot create thumbnail: thumbnailStrip element not found.");
-                }
-            } catch (thumbError) {
-                 console.error(`Error creating thumbnail for ${title}:`, thumbError);
-            }
+                const container = document.createElement('div'); container.className = 'thumbnail-container'; container.dataset.imageTitle = fileName;
+                const thumb = new Image(); thumb.src = img.src; thumb.className = 'thumbnail'; thumb.title = `${fileName} (${img.width}x${img.height})`;
+                const delBtn = document.createElement('button'); delBtn.className = 'delete-thumbnail-button'; delBtn.innerHTML = 'X'; delBtn.title = `Remove ${fileName}`;
+                container.append(thumb, delBtn); thumbnailStrip.appendChild(container);
+            } catch (e) { console.error(`Error creating thumb for ${fileName}:`, e); }
         }
 
+        // --- Handle Thumbnail Deletion ---
+        function handleThumbnailClick(event) {
+            if (!event.target.classList.contains('delete-thumbnail-button')) return;
+            const container = event.target.closest('.thumbnail-container');
+            if (!container) return;
+            const fileNameToDelete = container.dataset.imageTitle;
+            if (!fileNameToDelete) return;
 
-        // --- Cancel Stacking Operation ---
-        function cancelStacking() {
-            console.log("User initiated cancellation.");
+            const indexToDelete = loadedImageObjects.findIndex(item => item.fileName === fileNameToDelete);
+            if (indexToDelete !== -1) {
+                const itemToDelete = loadedImageObjects[indexToDelete];
+                if (itemToDelete.objectUrl) try { URL.revokeObjectURL(itemToDelete.objectUrl); } catch (e) { console.warn(`Error revoking URL for deleted ${fileNameToDelete}:`, e); }
+                loadedImageObjects.splice(indexToDelete, 1);
+                container.remove();
+                updateImageCountInfo();
+                stackedImageAvailable = false; // Deleting invalidates stack
+                recordedVideoBlob = null; // And video
+                status.textContent = `Removed ${fileNameToDelete}. ${loadedImageObjects.length} images remain.`;
+
+                if (loadedImageObjects.length === 0) {
+                    imageDimensions = { width: 0, height: 0, set: false }; clearCanvas();
+                } else {
+                    // If the first image was deleted, redraw canvas with the new first one
+                    if (indexToDelete === 0 && canvas && imageDimensions.set) {
+                         try {
+                              if (!ctx) ctx = canvas.getContext('2d');
+                              ctx.clearRect(0, 0, canvas.width, canvas.height);
+                              ctx.drawImage(loadedImageObjects[0].image, 0, 0);
+                         } catch(e) { console.error("Error drawing new first frame after delete:", e); clearCanvas();}
+                    }
+                }
+                resetUIState(); // Update button states
+            } else { console.error(`Delete failed: Could not find image data for ${fileNameToDelete}.`); container.remove(); updateImageCountInfo(); resetUIState(); }
+        }
+
+        // --- Cancel Current Operation ---
+        function cancelCurrentOperation() {
+            console.log(`User initiated cancellation for operation: ${currentOperation}`);
             isCancelled = true;
+            if (currentOperation === 'video' && mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop(); console.log("MediaRecorder stopped due to cancellation.");
+            }
+            if (currentOperation === 'video' && recordTimer) {
+                clearTimeout(recordTimer); recordTimer = null; console.log("Frame timer cleared due to cancellation.");
+            }
+            // Stacking loop checks isCancelled flag directly
             status.textContent = "Cancellation requested...";
-            if (cancelButton) cancelButton.disabled = true;
+            if (cancelButton) cancelButton.disabled = true; // Prevent multiple clicks
+            // UI reset happens in the operation's finally block
         }
 
         // --- Stack Images Function ---
         async function stackImages() {
             console.log("stackImages START");
-            if (!loadedImageObjects || loadedImageObjects.length < 2) {
-                status.textContent = "Need at least two loaded images of the same dimensions to stack.";
-                console.error("Stacking cancelled: Not enough valid images loaded.");
-                return;
-            }
-            if (!imageDimensions.set || imageDimensions.width <= 0 || imageDimensions.height <= 0) {
-                 status.textContent = "Cannot stack: Image dimensions not determined or invalid.";
-                 console.error("Stacking cancelled: Invalid image dimensions.");
-                 return;
-             }
-             if (!canvas) {
-                  status.textContent = "Error: Output canvas not found.";
-                  console.error("Stacking cancelled: Canvas element is null.");
-                  return;
-             }
+            if (!loadedImageObjects || loadedImageObjects.length < 2) { status.textContent = "Need at least 2 images to stack."; return; }
+            if (!imageDimensions.set) { status.textContent = "Image dimensions not set."; return; }
+            if (!canvas) { status.textContent = "Canvas error."; return; }
+            if (currentOperation) { status.textContent = `Busy with ${currentOperation}. Please wait or cancel.`; return; }
 
-            console.log(`stackImages: Starting stack operation with ${loadedImageObjects.length} images.`);
-            console.log(`Algorithm: ${algorithmSelect.value}, Dimensions: ${imageDimensions.width}x${imageDimensions.height}`);
-
+            currentOperation = 'stacking';
             isCancelled = false;
-            if (stackButton) stackButton.disabled = true;
-            if (resetButton) resetButton.disabled = true;
-            if (saveStackButton) saveStackButton.disabled = true;
-            if (algorithmSelect) algorithmSelect.disabled = true;
-            if (cancelButton) { cancelButton.style.display = 'inline-block'; cancelButton.disabled = false; }
-
+            stackedImageAvailable = false; // Reset flag before starting
+            recordedVideoBlob = null; // Invalidate video if stacking
+            setControlsBusy(true);
             status.textContent = `Preparing to stack ${loadedImageObjects.length} images using '${algorithmSelect.value}'...`;
-            if (progressContainer) progressContainer.style.display = 'block';
-            if (progressBar) progressBar.style.width = '0%';
+            progressContainer.style.display = 'block'; progressBar.style.width = '0%';
 
             try {
-                canvas.width = imageDimensions.width;
-                canvas.height = imageDimensions.height;
+                canvas.width = imageDimensions.width; canvas.height = imageDimensions.height;
                 if (canvas.textContent) canvas.textContent = '';
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) throw new Error("Could not get 2D context for output canvas.");
+                if (!ctx) throw new Error("Could not get 2D context.");
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // console.log("stackImages: Output canvas prepared."); // Reduce noise
 
-                workerCanvas.width = imageDimensions.width;
-                workerCanvas.height = imageDimensions.height;
-                // console.log("stackImages: Worker canvas prepared."); // Reduce noise
+                workerCanvas.width = imageDimensions.width; workerCanvas.height = imageDimensions.height;
 
                 status.textContent = `Processing image 1 / ${loadedImageObjects.length}...`;
                 ctx.drawImage(loadedImageObjects[0].image, 0, 0);
-                // console.log("Drew first image onto output canvas."); // Reduce noise
                 updateProgress(1, loadedImageObjects.length);
 
                 let resultImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 let resultData = resultImageData.data;
-                // console.log("stackImages: Got initial image data."); // Reduce noise
+                let sumData = null; // For average
 
-                let sumData = null;
                 if (algorithmSelect.value === 'average') {
-                    sumData = new Float32Array(resultData.length);
+                    sumData = new Float64Array(resultData.length);
                     for (let k = 0; k < resultData.length; k += 4) { sumData[k]=resultData[k]; sumData[k+1]=resultData[k+1]; sumData[k+2]=resultData[k+2]; }
-                    // console.log("Initialized sum array for averaging."); // Reduce noise
                 }
 
-                // console.log("stackImages: Starting processing loop for remaining images..."); // Reduce noise
                 for (let i = 1; i < loadedImageObjects.length; i++) {
                     if (isCancelled) { status.textContent = `Stacking cancelled by user after ${i} images.`; console.log("Stacking loop cancelled."); break; }
-
                     status.textContent = `Processing image ${i + 1} / ${loadedImageObjects.length}...`;
-                    const currentItem = loadedImageObjects[i];
-
                     workerCtx.clearRect(0, 0, workerCanvas.width, workerCanvas.height);
-                    workerCtx.drawImage(currentItem.image, 0, 0);
-                    const currentImageData = workerCtx.getImageData(0, 0, workerCanvas.width, workerCanvas.height);
-                    const currentData = currentImageData.data;
-
-                    const numPixels = resultData.length / 4;
+                    workerCtx.drawImage(loadedImageObjects[i].image, 0, 0);
+                    const currentData = workerCtx.getImageData(0, 0, workerCanvas.width, workerCanvas.height).data;
                     const algo = algorithmSelect.value;
-                    switch (algo) {
-                        case 'lighten': case 'maximum':
-                            for(let p=0;p<numPixels;p++){ const idx=p*4; resultData[idx]=Math.max(resultData[idx],currentData[idx]); resultData[idx+1]=Math.max(resultData[idx+1],currentData[idx+1]); resultData[idx+2]=Math.max(resultData[idx+2],currentData[idx+2]); resultData[idx+3]=255; } break;
-                        case 'average':
-                            for(let p=0;p<numPixels;p++){ const idx=p*4; sumData[idx]+=currentData[idx]; sumData[idx+1]+=currentData[idx+1]; sumData[idx+2]+=currentData[idx+2]; } break;
-                        default: console.warn("Unsupported algorithm selected:", algo); break;
-                    }
 
+                    for (let p = 0; p < resultData.length; p += 4) {
+                        switch (algo) {
+                            case 'lighten':
+                            case 'maximum':
+                                resultData[p]   = Math.max(resultData[p],   currentData[p]);
+                                resultData[p+1] = Math.max(resultData[p+1], currentData[p+1]);
+                                resultData[p+2] = Math.max(resultData[p+2], currentData[p+2]);
+                                break;
+                            case 'average':
+                                sumData[p]   += currentData[p];
+                                sumData[p+1] += currentData[p+1];
+                                sumData[p+2] += currentData[p+2];
+                                break;
+                        }
+                        resultData[p+3] = 255; // Ensure opaque alpha
+                    }
                     updateProgress(i + 1, loadedImageObjects.length);
-                    if ((i + 1) % YIELD_INTERVAL === 0 || (i + 1) === loadedImageObjects.length) { /* console.log(`stackImages: Processed image ${i+1}, yielding...`); */ await new Promise(resolve => setTimeout(resolve, 0)); }
-                } // End image loop
-                 // console.log("stackImages: Image processing loop finished."); // Reduce noise
+                    if ((i + 1) % YIELD_INTERVAL === 0) await new Promise(resolve => setTimeout(resolve, 0)); // Yield
+                }
 
                 if (!isCancelled) {
-                     // console.log("stackImages: Finalizing result (not cancelled)."); // Reduce noise
                      if (algorithmSelect.value === 'average' && sumData) {
-                         // console.log("Calculating final average..."); // Reduce noise
-                         const numImages = loadedImageObjects.length; const numPixels = resultData.length / 4;
-                         for(let p=0;p<numPixels;p++){ const idx=p*4; resultData[idx]=Math.round(sumData[idx]/numImages); resultData[idx+1]=Math.round(sumData[idx+1]/numImages); resultData[idx+2]=Math.round(sumData[idx+2]/numImages); resultData[idx+3]=255; }
-                         // console.log("Averaging complete."); // Reduce noise
+                         console.log("Calculating final average...");
+                         const numImages = loadedImageObjects.length;
+                         for(let p = 0; p < resultData.length; p+=4){
+                             resultData[p]   = Math.round(sumData[p]   / numImages);
+                             resultData[p+1] = Math.round(sumData[p+1] / numImages);
+                             resultData[p+2] = Math.round(sumData[p+2] / numImages);
+                         }
+                         console.log("Averaging complete.");
                      }
-                    // console.log("Putting final image data onto canvas..."); // Reduce noise
                     ctx.putImageData(resultImageData, 0, 0);
                     status.textContent = `Stacking complete: ${loadedImageObjects.length} images processed using '${algorithmSelect.value}'.`;
-                    console.log(`Stacking finished successfully. Processed ${loadedImageObjects.length} images.`);
-                    if(saveStackButton) saveStackButton.disabled = false;
-                } else {
-                     status.textContent = `Stacking cancelled. ${loadedImageObjects.length} images were available.`;
-                     console.log("Stacking was cancelled by user.");
+                    stackedImageAvailable = true; // Mark canvas as holding a valid stack
+                    console.log(`Stacking finished successfully.`);
                 }
 
             } catch (error) {
                 status.textContent = `Error during stacking: ${error.message}`;
                 console.error('>>> Error during stackImages:', error);
-                if (ctx && canvas && canvas.width > 0 && canvas.height > 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-                 if (canvas) { canvas.removeAttribute('width'); canvas.removeAttribute('height'); canvas.textContent = "An error occurred during stacking. Check console."; }
-                 if(saveStackButton) saveStackButton.disabled = true;
+                clearCanvas(); // Clear potentially corrupt canvas
+                stackedImageAvailable = false;
             } finally {
-                 // console.log("stackImages: Finally block executing."); // Reduce noise
-                resetUIState();
-                isCancelled = false;
-                 // console.log("stackImages: END"); // Reduce noise
+                currentOperation = null;
+                setControlsBusy(false); // Re-enable controls via resetUIState
+                isCancelled = false; // Reset flag
+                console.log("stackImages: END");
             }
         }
 
-        // --- Helper to reset UI state ---
-        function resetUIState() {
-             // console.log("resetUIState: Resetting UI controls."); // Reduce noise
-             if(stackButton) stackButton.disabled = !loadedImageObjects || loadedImageObjects.length < 2;
-             if(resetButton) resetButton.disabled = false;
-             if(algorithmSelect) algorithmSelect.disabled = false;
-             if(cancelButton) { cancelButton.style.display = 'none'; cancelButton.disabled = true; }
+        // --- Create Video Function ---
+        async function createVideo() {
+            console.log("createVideo START");
+            if (typeof MediaRecorder === 'undefined') { status.textContent = "Video creation not supported by browser."; return; }
+            if (!loadedImageObjects || loadedImageObjects.length < 1) { status.textContent = "Need at least 1 image for video."; return; }
+            if (!imageDimensions.set) { status.textContent = "Image dimensions not set."; return; }
+            if (!canvas) { status.textContent = "Canvas error."; return; }
+            if (currentOperation) { status.textContent = `Busy with ${currentOperation}. Please wait or cancel.`; return; }
 
-             setTimeout(() => {
-                 if(progressContainer) progressContainer.style.display = 'none';
-                 if(progressBar) progressBar.style.width = '0%';
-             }, 500);
-             // console.log(`resetUIState: Controls updated. Cancelled state was: ${isCancelled}`); // Reduce noise
+            const fps = parseInt(fpsInput.value, 10);
+            if (isNaN(fps) || fps < 1 || fps > 60) { status.textContent = "Invalid FPS (1-60)."; return; }
+            const frameDelay = 1000 / fps;
+
+            currentOperation = 'video';
+            isCancelled = false;
+            recordedVideoBlob = null; // Clear previous video
+            stackedImageAvailable = false; // Video creation overwrites canvas
+            videoChunks = [];
+            setControlsBusy(true);
+            status.textContent = `Preparing video stream (${fps} FPS)...`;
+            progressContainer.style.display = 'block'; progressBar.style.width = '0%';
+
+            try {
+                canvas.width = imageDimensions.width; canvas.height = imageDimensions.height;
+                if (canvas.textContent) canvas.textContent = '';
+                ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error("Could not get 2D context.");
+
+                let mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find(type => MediaRecorder.isTypeSupported(type)) || '';
+                console.log(`Using MediaRecorder MIME type: ${mimeType || 'Browser Default'}`);
+
+                const stream = canvas.captureStream(fps);
+                mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+
+                mediaRecorder.ondataavailable = (event) => { if (event.data?.size > 0) videoChunks.push(event.data); };
+                mediaRecorder.onstop = () => {
+                    console.log("MediaRecorder stopped.");
+                    stream.getTracks().forEach(track => track.stop()); // Stop stream tracks
+                    if (isCancelled) {
+                        status.textContent = "Video creation cancelled.";
+                        recordedVideoBlob = null; videoChunks = [];
+                    } else if (videoChunks.length > 0) {
+                        const blobMimeType = mediaRecorder.mimeType || videoChunks[0].type || 'video/webm';
+                        recordedVideoBlob = new Blob(videoChunks, { type: blobMimeType });
+                        status.textContent = `Video creation complete (${loadedImageObjects.length} frames). Ready to save.`;
+                        console.log(`Video Blob created: Size=${recordedVideoBlob.size}, Type=${recordedVideoBlob.type}`);
+                    } else {
+                        status.textContent = "Video creation failed: No data recorded."; recordedVideoBlob = null;
+                    }
+                    videoChunks = []; // Clear chunks even if successful
+                    currentOperation = null; // Mark operation as finished *after* async stop handler
+                    setControlsBusy(false); // Re-enable controls now
+                };
+                mediaRecorder.onerror = (event) => {
+                    console.error('MediaRecorder Error:', event.error); status.textContent = `Video Recording Error: ${event.error.name}`;
+                    isCancelled = true; stream.getTracks().forEach(track => track.stop()); if (recordTimer) clearTimeout(recordTimer);
+                    // onstop should still fire after error, handling UI reset there. If not, finally block below catches it.
+                };
+
+                mediaRecorder.start();
+                console.log("MediaRecorder started.");
+                status.textContent = `Recording frame 1 / ${loadedImageObjects.length}...`;
+
+                let currentFrame = 0;
+                const drawFrame = () => {
+                    if (isCancelled || currentOperation !== 'video') { // Check operation type too
+                         console.log("Draw loop terminating.");
+                         if (mediaRecorder?.state === "recording") mediaRecorder.stop(); // Ensure recorder stops if loop aborted early
+                         return;
+                    }
+                    if (currentFrame < loadedImageObjects.length) {
+                        try {
+                           ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(loadedImageObjects[currentFrame].image, 0, 0);
+                           status.textContent = `Recording frame ${currentFrame + 1} / ${loadedImageObjects.length}...`; updateProgress(currentFrame + 1, loadedImageObjects.length);
+                           currentFrame++; recordTimer = setTimeout(drawFrame, frameDelay);
+                        } catch (drawError) {
+                            console.error(`Error drawing frame ${currentFrame + 1}:`, drawError);
+                            status.textContent = `Error drawing frame ${currentFrame + 1}. Stopping.`;
+                            isCancelled = true; if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+                        }
+                    } else {
+                        console.log("All frames drawn. Stopping MediaRecorder...");
+                        if (mediaRecorder?.state === "recording") mediaRecorder.stop(); recordTimer = null;
+                        // onstop handler will set status and enable save button
+                    }
+                };
+                drawFrame(); // Start drawing
+
+            } catch (error) {
+                status.textContent = `Error during video setup: ${error.message}`; console.error('>>> Error during createVideo:', error);
+                isCancelled = true; if (mediaRecorder?.state === "recording") mediaRecorder.stop(); if (recordTimer) clearTimeout(recordTimer);
+                currentOperation = null; // Ensure operation state is cleared on error
+                setControlsBusy(false); // Reset UI on synchronous error
+            }
+            // Note: 'finally' block is removed here because async operations (onstop) handle the final state reset.
+            // Adding a finally block here might reset the UI *before* onstop finishes processing the blob.
+            console.log("createVideo: Function setup finished, async recording loop started.");
         }
+
+        // --- Set Controls Busy State ---
+        function setControlsBusy(isBusy) {
+            console.log(`setControlsBusy: ${isBusy}`);
+            if (stackButton) stackButton.disabled = isBusy || loadedImageObjects.length < 2;
+            if (createVideoButton) createVideoButton.disabled = isBusy || loadedImageObjects.length < 1 || typeof MediaRecorder === 'undefined';
+            if (resetButton) resetButton.disabled = isBusy;
+            if (algorithmSelect) algorithmSelect.disabled = isBusy;
+            if (fpsInput) fpsInput.disabled = isBusy;
+            if (imageInput) imageInput.disabled = isBusy;
+            if (thumbnailStrip) thumbnailStrip.style.pointerEvents = isBusy ? 'none' : 'auto';
+            if (cancelButton) { cancelButton.style.display = isBusy ? 'inline-block' : 'none'; cancelButton.disabled = false; } // Enable cancel when busy
+
+            // Save buttons depend on results, handled by resetUIState after operation
+            if (saveStackButton) saveStackButton.disabled = isBusy || !stackedImageAvailable;
+            if (saveVideoButton) saveVideoButton.disabled = isBusy || !recordedVideoBlob;
+
+             // Hide progress bar when not busy (with delay)
+            if (!isBusy) {
+                setTimeout(() => {
+                     if(progressContainer) progressContainer.style.display = 'none';
+                     if(progressBar) progressBar.style.width = '0%';
+                 }, 500);
+            }
+            resetUIState(); // Call resetUIState to ensure final state is consistent
+        }
+
+        // --- Reset UI State (Called after operations or changes) ---
+        function resetUIState() {
+             console.log("resetUIState: Updating button states.");
+             const imagesLoaded = loadedImageObjects.length;
+             const canStack = imagesLoaded >= 2;
+             const canCreateVideo = imagesLoaded >= 1 && typeof MediaRecorder !== 'undefined';
+             const isBusy = !!currentOperation; // Is an operation currently marked as running?
+
+             if(stackButton) stackButton.disabled = isBusy || !canStack;
+             if(createVideoButton) createVideoButton.disabled = isBusy || !canCreateVideo;
+             if(resetButton) resetButton.disabled = isBusy;
+             if(algorithmSelect) algorithmSelect.disabled = isBusy;
+             if(fpsInput) fpsInput.disabled = isBusy;
+             if(imageInput) imageInput.disabled = isBusy;
+             if(thumbnailStrip) thumbnailStrip.style.pointerEvents = isBusy ? 'none' : 'auto';
+             if(cancelButton) cancelButton.style.display = isBusy ? 'inline-block' : 'none';
+
+             // Enable save buttons ONLY if not busy AND the corresponding data exists
+             if(saveStackButton) saveStackButton.disabled = isBusy || !stackedImageAvailable;
+             if(saveVideoButton) saveVideoButton.disabled = isBusy || !recordedVideoBlob;
+
+              // Hide progress bar if not busy
+             if (!isBusy && progressContainer?.style.display !== 'none') {
+                  setTimeout(() => {
+                      if (!currentOperation) { // Double check in case another op started quickly
+                          if(progressContainer) progressContainer.style.display = 'none';
+                          if(progressBar) progressBar.style.width = '0%';
+                      }
+                  }, 500);
+             }
+             console.log(`resetUIState: Busy=${isBusy}, Stack=${stackButton?.disabled}, Video=${createVideoButton?.disabled}, SaveStack=${saveStackButton?.disabled}, SaveVideo=${saveVideoButton?.disabled}`);
+        }
+
 
         // --- Reset Application State ---
         function resetApplication() {
             console.log('resetApplication: START');
-            isCancelled = false;
+            cancelCurrentOperation(); // Request cancellation of any ongoing process
+            isCancelled = true; // Force flag
 
-            cleanupObjectUrls(); // Clean up URLs first
-            loadedImageObjects = []; // Then clear the array
-            imageDimensions = { width: 0, height: 0, set: false };
+            // Wait briefly for potential async cancellations to process before clearing data
+            setTimeout(() => {
+                console.log('resetApplication: Proceeding with clear state...');
+                currentOperation = null; // Ensure operation state is null
+                if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop(); // Force stop again if needed
+                if (recordTimer) clearTimeout(recordTimer);
+                mediaRecorder = null; videoChunks = []; recordedVideoBlob = null; recordTimer = null;
 
-             if (ctx && canvas?.width > 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-             ctx = null;
-             if (canvas) { canvas.removeAttribute('width'); canvas.removeAttribute('height'); canvas.textContent = "Select images using the button above. Ensure they all have the same dimensions."; }
+                cleanupObjectUrls();
+                loadedImageObjects = [];
+                imageDimensions = { width: 0, height: 0, set: false };
+                stackedImageAvailable = false;
 
-            if (thumbnailStrip) thumbnailStrip.innerHTML = '';
-             console.log('resetApplication: Data arrays and thumbnails cleared.');
+                clearCanvas();
+                if (thumbnailStrip) thumbnailStrip.innerHTML = '';
+                console.log('resetApplication: Data, canvas, thumbnails cleared.');
 
-            if(stackButton) stackButton.disabled = true;
-            if(resetButton) resetButton.disabled = false;
-            if(cancelButton) { cancelButton.style.display = 'none'; cancelButton.disabled = true; }
-            if(saveStackButton) saveStackButton.disabled = true;
-            if(algorithmSelect) { algorithmSelect.disabled = false; algorithmSelect.value = 'lighten'; }
-            if(status) status.textContent = 'Select multiple image files (JPG, PNG, WEBP) to begin.';
-            if(imageCountInfo) imageCountInfo.textContent = '(0 images loaded)';
-            if(progressContainer) progressContainer.style.display = 'none';
-            if(progressBar) progressBar.style.width = '0%';
-             console.log('resetApplication: UI controls reset.');
+                if(algorithmSelect) { algorithmSelect.disabled = false; algorithmSelect.value = 'lighten'; }
+                if(fpsInput) { fpsInput.disabled = false; fpsInput.value = '10'; }
+                if(status) status.textContent = 'Select multiple image files (JPG, PNG, WEBP) in sequence to begin.';
+                updateImageCountInfo();
 
-            // Keep file input value clearing commented out unless needed
-            // try { if (imageInput) imageInput.value = ''; } catch(e){ console.warn("resetApplication: Could not clear file input.", e); }
-
-             console.log('resetApplication: END');
+                isCancelled = false; // Reset flag *after* cleanup
+                setControlsBusy(false); // Reset all UI elements to default non-busy state
+                console.log('resetApplication: END');
+            }, 100); // Short delay for safety
         }
 
-        // --- Save Result Image ---
+        // --- Save Stacked Image ---
         function saveStackedImage() {
             console.log("saveStackedImage: START");
-            if (!canvas || !canvas.width || canvas.width <= 0 || !canvas.height || canvas.height <= 0) { if(status) status.textContent = 'No stacked image available to save'; console.log('Save failed: No image data on canvas'); return; }
-            if (!ctx) { ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) { if(status) status.textContent = 'Save failed: Canvas context is not available.'; console.error('Save failed: Canvas context lost/unacquirable.'); return; } console.warn("saveStackedImage: Reacquired context."); }
+            if (!stackedImageAvailable || !canvas || !canvas.width || !canvas.height) { status.textContent = 'No valid stacked image available to save.'; return; }
+            if (!ctx) { // Try to get context if lost
+                ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) { status.textContent = 'Save failed: Canvas context lost.'; return; }
+            }
 
             const algo = algorithmSelect ? algorithmSelect.value : 'unknown';
             const frameCount = loadedImageObjects ? loadedImageObjects.length : 0;
-            const filename = `stacked_image_${algo}_${frameCount}frames.png`;
+            const filename = `stacked_${algo}_${frameCount}frames.png`;
             const link = document.createElement('a'); link.download = filename;
 
             try {
-                 console.log(`saveStackedImage: Attempting to save as ${filename}`);
                  link.href = canvas.toDataURL('image/png');
-                 // console.log("saveStackedImage: Generated PNG data URL."); // Reduce noise
                  document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                 if(status) status.textContent = `Stacked image saved as ${filename}`; console.log(`Stacked image saved as ${filename}`);
+                 status.textContent = `Stacked image saved as ${filename}`; console.log(`Saved as ${filename}`);
             } catch (e) {
-                console.error(">>> Error saving image:", e);
-                if(status) status.textContent = `Error saving image: ${e.message}. Canvas too large or tainted?`;
+                console.error(">>> Error saving PNG:", e);
+                status.textContent = `Error saving PNG: ${e.message}. Trying JPG...`;
+                 try { // Fallback to JPG
+                      link.href = canvas.toDataURL('image/jpeg', 0.9);
+                      link.download = `stacked_${algo}_${frameCount}frames.jpg`;
+                      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                      status.textContent = `Stacked image saved as fallback JPG: ${link.download}`; console.log(`Saved as ${link.download}`);
+                 } catch (jpegError) {
+                      console.error(">>> Fallback JPG save also failed:", jpegError);
+                      status.textContent = `Error saving image: Both PNG and JPG failed. ${e.message}`;
+                 }
             }
-             // console.log("saveStackedImage: END"); // Reduce noise
+             console.log("saveStackedImage: END");
+        }
+
+        // --- Trigger Video Save ---
+        function triggerVideoSave() {
+            console.log("triggerVideoSave: START");
+            if (!recordedVideoBlob || recordedVideoBlob.size === 0) {
+                status.textContent = 'No valid video data available to save.';
+                 if(saveVideoButton) saveVideoButton.disabled = true; // Ensure button disabled
+                return;
+            }
+
+            const fileExtension = (recordedVideoBlob.type.includes('mp4')) ? 'mp4' : 'webm';
+            const frameCount = loadedImageObjects ? loadedImageObjects.length : 0;
+            const fps = fpsInput ? fpsInput.value : 'unknown';
+            const filename = `video_${frameCount}frames_${fps}fps.${fileExtension}`;
+            const link = document.createElement('a'); link.download = filename;
+
+            try {
+                const videoUrl = URL.createObjectURL(recordedVideoBlob);
+                link.href = videoUrl; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                status.textContent = `Video saved as ${filename}`; console.log(`Download initiated for ${filename}`);
+                setTimeout(() => { URL.revokeObjectURL(videoUrl); console.log(`Revoked video URL: ${videoUrl}`); }, 1000);
+            } catch (e) { console.error(">>> Error creating video download link:", e); status.textContent = `Error saving video: ${e.message}`; }
+            console.log("triggerVideoSave: END");
         }
 
     </script>
