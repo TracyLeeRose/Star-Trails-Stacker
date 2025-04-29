@@ -1,4 +1,4 @@
-# Aquiplicity 2025 - Image Stacker & Video Creator (v7 - Combined)
+# Star-Stacker 2025 - Image Stacker for Star Trails (& Video Creator)
 
 This is a browser-based utility designed to perform two main functions using a sequence of images:
 
